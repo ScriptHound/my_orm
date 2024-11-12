@@ -130,11 +130,11 @@ fn traverse_to_the_latest_node(statement: &mut QueryBlock) -> &mut QueryBlock {
 fn compile_statement(statement: &QueryBlock) -> String {
     fn helper(statement: &QueryBlock, acc: String) -> String {
         match &statement.secondary_part {
-            Some(next_node) => helper(next_node, acc + &statement.query_part),
+            Some(next_node) => helper(next_node, acc + " " + &statement.query_part),
             None => acc + " " + &statement.query_part,
         }
     }
-    helper(statement, "".to_string())
+    helper(statement, "".to_string())[1..].to_string()
 }
 
 mod tests {
@@ -178,7 +178,7 @@ mod tests {
             fields: None,
         };
         let mut binding = select(&model);
-        let query = binding.where_clause(&"id = 1".to_string());
+        let query = select(&model).where_clause(&"id = 1".to_string());
         let compiled_query = compile_statement(&query);
         assert_eq!(compiled_query, "SELECT * FROM users WHERE id = 1");
     }
@@ -189,10 +189,9 @@ mod tests {
             name: "users".to_string(),
             fields: Some(vec!["name".to_string()]),
         };
-        let mut binding = update(&model);
         let mut arguments = HashMap::new();
         arguments.insert("name".to_string(), "John".to_string());
-        let query = binding.set(&arguments);
+        let query = update(&model).set(&arguments);
         let compiled_query = compile_statement(&query);
         assert_eq!(compiled_query, "UPDATE users SET name = John");
     }
@@ -202,11 +201,12 @@ mod tests {
         let mut arguments = HashMap::new();
         arguments.insert("id".to_string(), "2".to_string());
         let mut where_string = "id = 1".to_string();
+        let fields = Some(vec!["id".to_string()]);
         let model = Model {
             name: "users".to_string(),
-            fields: None,
+            fields: fields,
         };
-        let mut query = update(&model).where_clause(&where_string).set(&arguments);
+        let mut query = update(&model).set(&arguments).where_clause(&where_string);
         let compiled_query = compile_statement(&query);
         assert_eq!(compiled_query, "UPDATE users SET id = 2 WHERE id = 1");
     }
