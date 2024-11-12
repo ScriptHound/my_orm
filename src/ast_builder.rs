@@ -7,10 +7,10 @@ enum StatementType {
     Delete,
     Insert
 }
-
+ 
 struct QueryBlock<'a> {
     pub query_part: String,
-    pub secondary_part: Option<Box<QueryBlock<'a>>>,
+    pub secondary_part: &'a mut Option<Box<QueryBlock<'a>>>,
     pub statement_type: StatementType
 }
 
@@ -29,19 +29,19 @@ trait SecondaryPart {
 
 
 impl<'a> SecondaryPart for QueryBlock<'a> {
-    fn values<'a>(&'a mut self, values: &Vec<String>) -> &'a QueryBlock {
+    fn values<'b>(&mut self, values: &'b Vec<String>) -> &'a QueryBlock {
         let values_str = format!("VALUES ({})", values.join(", "));
         let query_block = QueryBlock {
             query_part: values_str,
-            secondary_part: None,
+            secondary_part: &mut None,
             statement_type: self.statement_type.clone()
         };
         let latest_node = traverse_to_the_latest_node(self);
-        latest_node.secondary_part = Some(Box::new(query_block));
+        latest_node.secondary_part = &mut Some(Box::new(query_block));
         self
     }
 
-    fn set<'a>(&'a mut self, arguments: &HashMap<String, String>) -> &'a QueryBlock {
+    fn set(&mut self, arguments: &HashMap<String, String>) -> &QueryBlock {
         let set_clause = arguments
             .iter()
             .map(|(key, value)| format!("{} = {}", key, value))
@@ -50,24 +50,24 @@ impl<'a> SecondaryPart for QueryBlock<'a> {
         let set_clause_str = format!("SET {}", set_clause);
         let query_block = QueryBlock {
             query_part: set_clause_str,
-            secondary_part: None,
+            secondary_part: &None,
             statement_type: self.statement_type.clone()
         };
         let latest_node = traverse_to_the_latest_node(self);
-        latest_node.secondary_part = Some(Box::new(query_block));
+        latest_node.secondary_part = &Some(Box::new(query_block));
         self
     }
     
-    fn where_clause<'a>(&'a mut self, where_clause: &String) -> &'a QueryBlock {
+    fn where_clause(&mut self, where_clause: &String) -> &QueryBlock {
         let where_clause_str = format!("WHERE {}", where_clause);
 
         let query_block = QueryBlock {
             query_part: where_clause_str,
-            secondary_part: None,
+            secondary_part: &None,
             statement_type: self.statement_type.clone()
         };
         let latest_node = traverse_to_the_latest_node(self);
-        latest_node.secondary_part = Some(Box::new(query_block));
+        latest_node.secondary_part = &Some(Box::new(query_block));
         self
     }
 }
@@ -78,12 +78,12 @@ fn select<'a>(model: &Model) -> QueryBlock {
         Some(fields) => QueryBlock {
             query_part: format!("SELECT {} FROM {}", fields.join(", "), model.name),
             statement_type: StatementType::Select,
-            secondary_part: None,
+            secondary_part: &None,
         },
         None => QueryBlock {
             query_part: format!("SELECT * FROM {}", model.name),
             statement_type: StatementType::Select,
-            secondary_part: None
+            secondary_part: &None
         }
     }
 }
@@ -94,7 +94,7 @@ fn update(model: &Model) -> QueryBlock {
         Some(fields) => QueryBlock {
             query_part: format!("UPDATE {}", model.name),
             statement_type: StatementType::Update,
-            secondary_part: None
+            secondary_part: &None
         },
         None => panic!("Update query must have fields")
     }
@@ -105,7 +105,7 @@ fn delete(model: &Model) -> QueryBlock {
     QueryBlock {
         query_part: format!("DELETE FROM {}", model.name),
         statement_type: StatementType::Delete,
-        secondary_part: None
+        secondary_part: &None
     }
 }
 
@@ -115,18 +115,18 @@ fn insert(model: &Model) -> QueryBlock {
         Some(fields) => QueryBlock {
             query_part: format!("INSERT INTO {} ({})", model.name, fields.join(", ")),
             statement_type: StatementType::Insert,
-            secondary_part: None
+            secondary_part: &None
         },
         None => QueryBlock {
             query_part: format!("INSERT INTO {}", model.name),
             statement_type: StatementType::Insert,
-            secondary_part: None
+            secondary_part: &None
         }
     };
     model
 }
 
-fn traverse_to_the_latest_node<'a>(statement: &mut QueryBlock) -> &mut QueryBlock {
+fn traverse_to_the_latest_node<'a>(statement: &mut QueryBlock) -> &'a mut QueryBlock<'a> {
     let mut ret = statement;
     while ret.secondary_part.is_some() {
         ret = ret.secondary_part.as_mut().unwrap();
